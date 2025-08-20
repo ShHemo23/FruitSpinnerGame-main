@@ -1,0 +1,272 @@
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { motion, AnimatePresence } from 'framer-motion';
+
+class SlotSymbol {
+  constructor(symbolName, coefficient, probability) {
+    this.symbolName = symbolName;
+    this.coefficient = coefficient;
+    this.probability = probability;
+  }
+}
+
+const symbols = [
+  new SlotSymbol("(A)", 0.4, 0.45),
+  new SlotSymbol("(B)", 0.6, 0.35),
+  new SlotSymbol("(P)", 0.8, 0.15),
+  new SlotSymbol("(*)", 0, 0.05)
+];
+
+const SlotReel = ({ symbol, isSpinning }) => {
+  const [currentSymbol, setCurrentSymbol] = useState(symbol);
+  
+  useEffect(() => {
+    if (isSpinning) {
+      const interval = setInterval(() => {
+        const randomSymbol = symbols[Math.floor(Math.random() * symbols.length)].symbolName;
+        setCurrentSymbol(randomSymbol);
+      }, 100);
+      return () => clearInterval(interval);
+    } else {
+      setCurrentSymbol(symbol);
+    }
+  }, [isSpinning, symbol]);
+
+  return (
+    <div className="relative w-24 h-24 bg-gradient-to-b from-purple-600 to-blue-600 rounded-lg overflow-hidden shadow-lg">
+      <div className="absolute inset-0 bg-black/10" />
+      <motion.div
+        className="w-full h-full flex items-center justify-center text-2xl font-bold text-white"
+        animate={{
+          y: isSpinning ? [0, -20, 0] : 0,
+        }}
+        transition={{
+          duration: 0.2,
+          repeat: isSpinning ? Infinity : 0,
+        }}
+      >
+        {currentSymbol || '?'}
+      </motion.div>
+    </div>
+  );
+};
+
+const WinAnimation = ({ show }) => {
+  return (
+    <AnimatePresence>
+      {show && (
+        <motion.div
+          className="absolute inset-0 pointer-events-none"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <div className="w-full h-full flex items-center justify-center">
+            <motion.div
+              className="text-4xl font-bold text-yellow-400"
+              animate={{
+                scale: [1, 1.2, 1],
+                rotate: [0, 5, -5, 0],
+              }}
+              transition={{
+                duration: 0.5,
+                repeat: 3,
+              }}
+            >
+              WIN!
+            </motion.div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+};
+
+const SlotMachine = () => {
+  const [balance, setBalance] = useState(0);
+  const [stake, setStake] = useState('');
+  const [isSpinning, setIsSpinning] = useState(false);
+  const [results, setResults] = useState(['', '', '']);
+  const [winAmount, setWinAmount] = useState(0);
+  const [gameStarted, setGameStarted] = useState(false);
+  const [depositAmount, setDepositAmount] = useState('');
+  const [error, setError] = useState('');
+  const [showWinAnimation, setShowWinAnimation] = useState(false);
+
+  const validateDeposit = (amount) => {
+    if (amount <= 0) {
+      setError('Please enter a positive number.');
+      return false;
+    }
+    return true;
+  };
+
+  const validateStake = (amount) => {
+    if (amount <= 0) {
+      setError('Please enter a positive stake amount.');
+      return false;
+    }
+    if (amount > balance) {
+      setError('Stake amount cannot be greater than your balance.');
+      return false;
+    }
+    return true;
+  };
+
+  const handleDeposit = () => {
+    const amount = parseFloat(depositAmount);
+    if (validateDeposit(amount)) {
+      setBalance(amount);
+      setGameStarted(true);
+      setError('');
+    }
+  };
+
+  const spinReels = () => {
+    const stakeNum = parseFloat(stake);
+    if (!validateStake(stakeNum)) return;
+    
+    setIsSpinning(true);
+    setBalance(prev => prev - stakeNum);
+    setError('');
+    setShowWinAnimation(false);
+
+    setTimeout(() => {
+      const randomResults = Array(3).fill(0).map(() => {
+        const rand = Math.random();
+        let cumProb = 0;
+        return symbols.find(s => {
+          cumProb += s.probability;
+          return rand <= cumProb;
+        }).symbolName;
+      });
+      
+      setResults(randomResults);
+      setIsSpinning(false);
+      calculateWin(randomResults, stakeNum);
+    }, 2000);
+  };
+
+  const calculateWin = (spinResults, stakeAmount) => {
+    const uniqueSymbols = new Set(spinResults);
+    let win = 0;
+
+    if (uniqueSymbols.size === 1) {
+      const symbol = symbols.find(s => s.symbolName === spinResults[0]);
+      win = stakeAmount * (1 + symbol.coefficient);
+      if (win > 0) setShowWinAnimation(true);
+    }
+
+    setWinAmount(win);
+    setBalance(prev => prev + win);
+  };
+
+  return (
+    <Card className="w-full max-w-lg mx-auto relative overflow-hidden">
+      <CardHeader>
+        <CardTitle className="text-center text-2xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+          Slot Machine Game
+        </CardTitle>
+        <CardDescription className="text-center font-semibold">
+          (A) - (B) - (P) - (*)
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {error && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        {!gameStarted ? (
+          <motion.div
+            className="space-y-4"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <div className="text-center mb-2">Enter deposit amount:</div>
+            <Input
+              type="number"
+              value={depositAmount}
+              onChange={(e) => setDepositAmount(e.target.value)}
+              className="text-center"
+            />
+            <Button 
+              onClick={handleDeposit}
+              className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+              disabled={!depositAmount}
+            >
+              Start Game
+            </Button>
+          </motion.div>
+        ) : (
+          <div className="space-y-6">
+            <div className="flex justify-center space-x-4">
+              {results.map((symbol, idx) => (
+                <SlotReel key={idx} symbol={symbol} isSpinning={isSpinning} />
+              ))}
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4 text-center">
+              <div className="p-4 bg-gray-100 rounded-lg">
+                <div className="text-sm text-gray-600">Balance</div>
+                <div className="text-xl font-bold">${balance.toFixed(2)}</div>
+              </div>
+              <div className="p-4 bg-gray-100 rounded-lg">
+                <div className="text-sm text-gray-600">Win</div>
+                <div className="text-xl font-bold">${winAmount.toFixed(2)}</div>
+              </div>
+            </div>
+
+            <div>
+              <div className="text-center mb-2">Enter stake amount:</div>
+              <Input
+                type="number"
+                value={stake}
+                onChange={(e) => setStake(e.target.value)}
+                className="text-center"
+                disabled={isSpinning}
+              />
+            </div>
+
+            <Button 
+              onClick={spinReels}
+              className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+              disabled={isSpinning || !stake || parseFloat(stake) <= 0 || parseFloat(stake) > balance}
+            >
+              {isSpinning ? (
+                <span className="flex items-center space-x-2">
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                  >
+                    ⚡
+                  </motion.div>
+                  <span>Spinning...</span>
+                </span>
+              ) : (
+                'Spin'
+              )}
+            </Button>
+
+            <WinAnimation show={showWinAnimation} />
+
+            {balance <= 0 && (
+              <Alert variant="destructive">
+                <AlertDescription>Game Over! You have run out of money.</AlertDescription>
+              </Alert>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
+export default SlotMachine;
+
+
+ Use fruit shapes instead of (A)(B)(P)(*) to fit with the concept of a slot machine or any other shapes.
