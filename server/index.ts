@@ -58,12 +58,20 @@ app.use((req, res, next) => {
 
   // ALWAYS serve the app on port 5000
   // this serves both the API and the client
-  const port = 5000;
-  server.listen({
+ const port = 5000;
+const host = process.env.HOST || "127.0.0.1";
+
+// Only use reusePort on non-Windows
+const isWindows = process.platform === "win32";
+
+server.listen(
+  {
     port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
-    log(`serving on port ${port}`);
-  });
+    host,
+    reusePort: !isWindows,
+  },
+  () => {
+    log(`serving on http://${host}:${port}`);
+  }
+);
 })();
